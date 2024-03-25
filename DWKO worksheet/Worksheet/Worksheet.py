@@ -4,12 +4,12 @@ class main_motor:
     
     def arm_current(self):
         self.arm_current
-        orders={"DSAH":600,
-                "SAH":1400,
-                "HAH":1600,
-                "FAH":4500}
-        self.arm_current=orders.get(self.regime)
-        print(self.arm_current)      
+        orders={"DSAH":{600,150},
+                "SAH":{1400,200},
+                "HAH":{1600,260},
+                "FAH":{4500,360}}
+        orders.get(self.regime)
+        print(arm_current)      
 
 
 class Eco_motor:
