@@ -3,14 +3,12 @@ class main_motor:
         self.regime = regime
     
     def arm_current(self):
-        self.arm_current
-        orders={"DSAH":{600,150},
-                "SAH":{1400,200},
-                "HAH":{1600,260},
-                "FAH":{4500,360}}
-        orders.get(self.regime)
-        print(arm_current)      
-
+        orders={"DSAH": [600, 150],
+                "SAH": [1400, 200],
+                "HAH": [1600, 260],
+                "FAH": [4500, 360]}
+        self.arm_current = orders.get(self.regime)[1]
+        return self.arm_current
 
 class Eco_motor:
     pass
@@ -27,5 +25,5 @@ class charging_plan:
 class major_machineries:
     pass
 
-x=main_motor("DSAH")
-x.arm_current;
+x = main_motor("DSAH")
+print(x.arm_current())  # Corrected: calling arm_current() method
