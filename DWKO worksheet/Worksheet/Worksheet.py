@@ -1,65 +1,122 @@
+from datetime import datetime
+def is_odd_day():
+    """
+    Returns True if the current day of the month is odd, False otherwise.
+    """
+    current_day = datetime.now().day
+    return current_day % 2 != 0
 
+def is_odd(name):
+    """
+    Determines if the machine name ends with an odd number.
+    """
+    try:
+        # Extract the last number from the machine name
+        number = int(name.split()[-1])
+        return number % 2 != 0
+    except ValueError:
+        return False
 class MainMotor:
-    def __init__(self, regime):
-        self.regime = regime
-        self.specs = self.get_motor_specs()
-
-    def get_motor_specs(self):
-        orders = {
+    def __init__(self, regime, rpm):
+        """
+        Initializes the MainMotor with the given regime and RPM.
+        """
+        self.orders = {
             "DSAH": [(140, 600), (180, 750)], 
             "SAH": [(200, 1400), (250, 1600)], 
             "HAH": [(260, 1600), (300, 1800)],
             "FAH": [(340, 4500), (370, 4600)]  
         }
-        if self.regime in orders:
-            return orders[self.regime]
+        self.regime = regime
+        self.rpm = rpm
+
+    def get_motor_specs(self):
+        """
+        Retrieves motor specifications for the given regime.
+        
+        Returns:
+            list of tuple: List of (RPM, current) pairs for the motor.
+        
+        Raises:
+            ValueError: If the regime is unknown.
+        """
+        if self.regime in self.orders:
+            return self.orders[self.regime]
         else:
             raise ValueError(f"Unknown regime: {self.regime}")
 
     def interpolate(self, target_rpm):
-        rpms = sorted([spec[0] for spec in self.specs])
-        if target_rpm in rpms:
-            for spec in self.specs:
-                if spec[0] == target_rpm:
-                    return spec[1]
+        """
+        Interpolates the current draw for a given RPM based on motor specifications.
+        
+        Args:
+            target_rpm (int): The RPM for which to interpolate the current.
+        
+        Returns:
+            float: The interpolated current draw for the target RPM.
+        
+        Raises:
+            ValueError: If the target RPM is out of the interpolation range.
+        """
+        specs = self.get_motor_specs()
+        rpms = sorted([spec[0] for spec in specs])
+        currents = {rpm: current for rpm, current in specs}
+
+        if target_rpm in currents:
+            return currents[target_rpm]
+        
+        if target_rpm < rpms[0] or target_rpm > rpms[-1]:
+            raise ValueError(f"RPM {target_rpm} is out of the interpolation range.")
         
         for i in range(len(rpms) - 1):
             if rpms[i] <= target_rpm <= rpms[i + 1]:
-                rpm0, current0 = self.specs[i]
-                rpm1, current1 = self.specs[i + 1]
+                rpm0, current0 = specs[i]
+                rpm1, current1 = specs[i + 1]
                 
+                # Linear interpolation formula
                 current = current0 + (current1 - current0) * (target_rpm - rpm0) / (rpm1 - rpm0)
                 
                 return current
         
-        raise ValueError(f"RPM {target_rpm} is out of interpolation range.")
+        # This line should theoretically never be reached due to earlier checks
+        raise ValueError(f"RPM {target_rpm} is out of the interpolation range.")
 
-    def arm_current(self, rpm):
-        return self.interpolate(rpm)
+    def get_current(self):
+        """
+        Retrieves the current draw for the motor's current RPM.
+        
+        Returns:
+            float: The current draw for the motor's RPM.
+        """
+        return self.interpolate(self.rpm)
+
+
 
 class EcoMotor:
     def __init__(self, regime):
         self.regime = regime
-        self.current_drawn, self.rpm = self.get_motor_specs()
-
-    def get_motor_specs(self):
-        orders = {
+        self.current_drawn = 0
+        self.rpm = 0
+        self.orders = {
             "DSAH": [150, 80],
             "SAH": [250, 100],
             "HAH": [350, 125],
             "FAH": [650, 150]
         }
-        if self.regime in orders:
-            return orders[self.regime]
+        self.get_motor_specs()  # Initialize current_drawn and rpm
+
+    def get_motor_specs(self):
+        if self.regime in self.orders:
+            self.current_drawn, self.rpm = self.orders[self.regime]
         else:
             raise ValueError(f"Unknown regime: {self.regime}")
 
-    def arm_current(self):
+    def get_current(self):
         return self.current_drawn
-
+    
     def motor_rpm(self):
+        print(self.rpm)
         return self.rpm
-
 
 class machine:
     def __init__(self, name, starting_current, running_current):
@@ -74,7 +131,7 @@ class machine:
             return self.running_current if regime == 'running' else self.running_current
             
         return 0
-
+    
 
 class compartments:
     def __init__(self, name):
@@ -114,7 +171,7 @@ class compartments:
             self.machines.append(machine("Hydraulic pump no 1", 165, 33))
             self.machines.append(machine("Hydraulic pump no 2", 150, 30))
             self.machines.append(machine("15MBOO no 1", 9.5, 2.02))
-            self.machines.append(machine("15MBOO no 1", 9, 2.01))
+            self.machines.append(machine("15MBOO no 2", 9, 2.01))
             self.machines.append(machine("Condencer cooling pump", 45, 21))
             self.machines.append(machine("20 TR", 140, 55))
             self.machines.append(machine("Provision room blower", 16, 1.5))
@@ -160,7 +217,7 @@ class compartments:
             self.machines.append(machine("Lube Oil Pump 4", 39, 16.9))
             self.machines.append(machine("ECO Shaft Cooling Pump 5/17", 12, 4))
             self.machines.append(machine("Aux Cooling SN 23 no 3", 45, 22))
-            self.machines.append(machine("Aux Cooling SN 23 no 5", 47, 21))
+            self.machines.append(machine("Aux Cooling SN 23 no 4", 47, 21))
             self.machines.append(machine("40/15 C/W pump", 40, 15))
             self.machines.append(machine("47 TR", 45, 22))
             self.machines.append(machine("Compartment Blower", 10, 4.5))
@@ -204,27 +261,39 @@ class BatteryPerformance:
             10: (1630, 1.93, 1.70, 16300),
             20: (923.5, 1.95, 1.75, 18470),
             50: (408, 1.96, 1.70, 20200),
-            100: (204, 1.97, 1.70, 20400)
-        }
+            100: (204, 1.97, 1.70, 20400)}
         self.usage_limit = 0.50  # Only 50% usage before recharging
 
     def interpolate_capacity(self, discharge_current):
-        # Extract data into arrays for interpolation
         discharge_rates = np.array(sorted(self.performance_data.keys()))
         discharge_currents = np.array([self.performance_data[rate][0] for rate in discharge_rates])
         capacities = np.array([self.performance_data[rate][3] for rate in discharge_rates])
         
-        # Interpolate between discharge currents and capacities
-        capacity = np.interp(discharge_current, discharge_currents, capacities)
+        # Perform interpolation and extrapolation
+        if discharge_current < discharge_currents[0]:
+            # Extrapolate below the smallest discharge current
+            slope = (capacities[1] - capacities[0]) / (discharge_currents[1] - discharge_currents[0])
+            capacity = capacities[0] + slope * (discharge_current - discharge_currents[0])
+        elif discharge_current > discharge_currents[-1]:
+            # Extrapolate above the largest discharge current
+            slope = (capacities[-1] - capacities[-2]) / (discharge_currents[-1] - discharge_currents[-2])
+            capacity = capacities[-1] + slope * (discharge_current - discharge_currents[-1])
+        else:
+            # Interpolate between known data points
+            capacity = np.interp(discharge_current, discharge_currents, capacities)
+        
         return capacity * self.usage_limit  # Apply 50% usage limit
     
     def get_battery_duration(self, current_draw):
+        if current_draw <= 0:
+            raise ValueError("Current draw must be positive")
+        
         capacity = self.interpolate_capacity(current_draw)
         duration = capacity / current_draw  # hours the battery can last
         return duration
 
 class boat:
-    def __init__(self, main_motor_regime):
+    def __init__(self, regime, rpm):
         self.compartments = [
             compartments("F/E"),
             compartments("C/R"),
@@ -233,31 +302,53 @@ class boat:
             compartments("M/R"),
             compartments("A/E")
         ]
+        self.rpm = rpm
+        self.regime = regime
         self.battery_performance = BatteryPerformance()  # Integrate battery performance
-        self.main_motor = MainMotor(main_motor_regime)  # Initialize with the appropriate regime
+        self.motor_current = 0
 
     def set_regime(self, regime):
         if regime == "Snorting":
-            # Set all machines running except for the ones that shouldn't be running in F/E
-            self.compartments[0].set_machine_exclusions(["1B1"])
-            self.compartments[1].set_machine_exclusions(["1B1","2P1","6MBX2","Aux Cooling SN 23 no 1","Appassionate 5/17 pump no 1"])
-            self.compartments[2].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[3].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[4].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[5].set_machine_exclusions(["Reserve Motor(P)"])
+            self.set_machine_status("F/E", ["1B1", "WC Blower"])
+            self.set_machine_status("C/R", ["1B1", "2P1", "6MBX2"])
+            self.set_machine_status("Third", ["Galley Blower"])
+            self.set_machine_status("E/R", ["Standard Blower", "1B1", "Emergency Fresh water pump"])
+            self.set_machine_status("M/R", ["1B1"])
+            self.set_machine_status("A/E", ["Reserve Motor(P)", "Reserve Motor(S)", "2P1", "1B1", "Reserve Motor blower(P)", "Reserve Motor blower(S)"])
+            self.motor_current = MainMotor(self.regime, self.rpm)
         elif regime == "Consuming":
-            self.compartments[0].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[1].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[2].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[3].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[4].set_machine_exclusions(["Reserve Motor(P)"])
-            self.compartments[5].set_machine_exclusions(["Reserve Motor(P)"])
+            self.set_machine_status("F/E", ["Reserve Motor(P)"])
+            self.set_machine_status("C/R", ["Reserve Motor(P)"])
+            self.set_machine_status("Third", ["Reserve Motor(P)"])
+            self.set_machine_status("E/R", ["Reserve Motor(P)"])
+            self.set_machine_status("M/R", ["Reserve Motor(P)"])
+            self.set_machine_status("A/E", ["Reserve Motor(P)"])
+            self.motor_current = EcoMotor(self.regime)
+            self.rpm = EcoMotor(self.regime).motor_rpm()
         else:
             for compartment in self.compartments:
-                compartment.set_machine_status([])
+                compartment.set_machine_exclusions([])
+
+    def set_machine_status(self, compartment_name, manual_exclusions):
+        """
+        Set the status of machines in a specific compartment based on exclusions.
+        """
+        compartment = next((c for c in self.compartments if c.name == compartment_name), None)
+        if compartment:
+            # Start with manual exclusions
+            excluded_machines = manual_exclusions.copy()
+
+            # Add automatic exclusions based on the day
+            if is_odd_day():
+                excluded_machines += [machine.name for machine in compartment.machines if is_odd(machine.name)]
+            else:
+                excluded_machines += [machine.name for machine in compartment.machines if not is_odd(machine.name)]
+
+            compartment.set_machine_exclusions(excluded_machines)
+
 
     def get_total_current(self, regime='running'):
-        return sum(compartment.get_total_current(regime) for compartment in self.compartments)
+        return self.motor_current.get_current()+sum(compartment.get_total_current(regime) for compartment in self.compartments)
 
     def calculate_battery_duration(self, current_draw):
         return self.battery_performance.get_battery_duration(current_draw)
@@ -269,29 +360,15 @@ class boat:
     
     def calculate_speed_over_ground(self):
         # Get RPM from MainMotor
-        motor_rpm = self.main_motor.specs[0][0]  # Assuming you want RPM of the first specification
+        motor_rpm = self.rpm  # Assuming you want RPM of the first specification
         # Calculate speed in knots
         speed = (motor_rpm / 50) - 0.5
         return speed
 
-    # # Example usage
-    # main_motor_regime = "DSAH"  # Example regime
-    # my_boat = boat(main_motor_regime)
-    # my_boat.set_regime("Snorting")  # Set a specific regime
-    # total_current_draw = my_boat.get_total_current()
-    #
-    # # Calculate battery life based on the total current draw with 50% usage limitation
-    # battery_life_hours = my_boat.calculate_battery_duration(total_current_draw)
-    #
-    # # Calculate speed over ground using motor RPM
-    # speed_over_ground = my_boat.calculate_speed_over_ground()
-    #
-    # print(f"Total current draw: {total_current_draw} A")
-    # print(f"Battery will last for: {battery_life_hours:.2f} hours (50% usage limit)")
-    # print(f"Speed over ground: {speed_over_ground:.2f} knots based on motor RPM of {my_boat.main_motor.specs[0][0]}")
-    # # Example usage
-main_motor_regime = "DSAH"  # Example regime
-my_boat = boat(main_motor_regime)
+# Define regime and RPM
+regime = "DSAH"
+rpm = 170  # Example regime
+my_boat = boat(regime, rpm)
 my_boat.set_regime("Snorting")  # Set a specific regime
 
 # Print compartment and machine details
@@ -314,4 +391,4 @@ speed_over_ground = my_boat.calculate_speed_over_ground()
 
 print(f"\nTotal current draw: {total_current_draw} A")
 print(f"Battery will last for: {battery_life_hours:.2f} hours (50% usage limit)")
-print(f"Speed over ground: {speed_over_ground:.2f} knots based on motor RPM of {my_boat.main_motor.specs[0][0]}")
+print(f"Speed over ground: {speed_over_ground:.2f} knots")
